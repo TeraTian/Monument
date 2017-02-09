@@ -1,0 +1,697 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>纪念碑谷</title>
+    <script src="js/three.min.js"></script>
+    <script src="js/TrackballControls.js"></script>
+    <script src="js/Tween__modify.js"></script>
+    <script src="js/jquery.js"></script>
+    <style type="text/css">
+        div#canvas-frame {
+            border: none;
+            width: 100%;
+            height: 700px;
+            background-color: #EEEEEE;
+        }
+
+        .button {
+            border: 1px solid red;
+            position: absolute;
+            width: 200px;
+            height: 100px;
+            top: 0px;
+            left: 0px;
+            line-height: 100px;
+            font-size: 40px;
+            text-align: center;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body onload="threeStart();">
+    <div id="canvas-frame"></div>
+    <div class="button" id="button">点击旋转</div>
+</body>
+</html>
+
+<script>
+    $(function () {
+        var iheight = window.innerHeight;
+        var iwidth = window.innerWidth;
+        $("#canvas-frame").height(iheight);
+        $("#button").css({ top: iheight * 0.35, left: iwidth * 0.75 });
+    })
+    var renderer;
+    function initThree() {
+        width = document.getElementById('canvas-frame').clientWidth;
+        height = document.getElementById('canvas-frame').clientHeight;
+        renderer = new THREE.WebGLRenderer({
+            antialias: true
+        });
+        renderer.setSize(width, height);
+        document.getElementById('canvas-frame').appendChild(renderer.domElement);
+        renderer.setClearColor(0xFFFFFF, 1.0);
+    }
+
+    var camera;
+    function initCamera() {
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+        camera = new THREE.OrthographicCamera(width / -2, width / 2, height / 2, height / -2, 1, 10000);
+        //camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
+        camera.position.x = 1000;
+        camera.position.y = 1000;
+        camera.position.z = 1000;
+        camera.up.x = 0;
+        camera.up.y = 1;
+        camera.up.z = 0;
+        camera.lookAt({
+            x: 0,
+            y: 0,
+            z: 0
+        });
+    }
+
+    var scene;
+    function initScene() {
+        scene = new THREE.Scene();
+    }
+
+    var light;
+    function initLight() {
+        light = new THREE.DirectionalLight(0x789abc, 5);
+        light.position.set(2.5, 7, 4);
+        scene.add(light);
+        // A end
+
+    }
+
+    var moveObject = [];//可动部分对象数组
+    var unitWidth = 50, stairWidth = 10, half_unitWidth = unitWidth / 2, moveDown = 400, terminal;
+    var moveCenter;//可动部分旋转中心
+    //建立3D场景
+    function initObject() {
+        //var boxSize = 100, startX = -1000, startY = -1000, num = 10, space = 100;
+        //var geometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize, 4, 4);
+        //// B start
+        //var material = new THREE.MeshLambertMaterial({ color: 0x880000 });
+        //// B end
+        //for (var i = 0; i < 100; i++) {
+        //    var mesh = new THREE.Mesh(geometry, material);
+        //    var row = Math.floor(i / num);
+        //    var col = i % num;
+        //    mesh.position = new THREE.Vector3(startX + col * (space + boxSize), startY + row * (space + boxSize), 0);
+        //    scene.add(mesh);
+        //}
+        //固定部分颜色
+        var material = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        //下半 底梁
+        var geometry = new THREE.BoxGeometry(10 * unitWidth, unitWidth, unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = -moveDown;
+        scene.add(mesh);
+        //下半 左梁
+        var geometry = new THREE.BoxGeometry(unitWidth, unitWidth, 4 * unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = -moveDown;
+        mesh.position.x = -8 / 2 * unitWidth - half_unitWidth;
+        mesh.position.z = -(4 / 2 * unitWidth) - half_unitWidth;
+        scene.add(mesh);
+        //下半 右梁
+        var geometry = new THREE.BoxGeometry(unitWidth, 4 * unitWidth, unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = 4 / 2 * unitWidth + half_unitWidth - moveDown;
+        mesh.position.x = 10 / 2 * unitWidth - half_unitWidth;
+        scene.add(mesh);
+        //上半 下梁
+        var geometry = new THREE.BoxGeometry(5 * unitWidth, unitWidth, unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = -moveDown;
+        mesh.position.x = -11.5 * unitWidth;
+        mesh.position.z = -9 * unitWidth;
+        scene.add(mesh);
+        //上半 楼梯+平台
+        var sCluster = new THREE.Object3D();
+        //楼梯
+        var geometry = new THREE.BoxGeometry(unitWidth, stairWidth, stairWidth);
+        for (var i = 0; i < 10; i++) {
+            var mesh = new THREE.Mesh(geometry, material);
+            mesh.position.y = i * stairWidth;
+            mesh.position.z = -i * stairWidth;
+            sCluster.add(mesh);
+        }
+        //平台
+        var geometry = new THREE.BoxGeometry(2 * unitWidth, stairWidth, 2 * unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = 10 * stairWidth;
+        mesh.position.z = -10 * stairWidth - unitWidth + stairWidth / 2;
+        sCluster.add(mesh);
+        sCluster.position.x = -13.5 * unitWidth;
+        sCluster.position.y = -moveDown;
+        sCluster.position.z = -9 * unitWidth;
+        scene.add(sCluster);
+        //细梁+遮罩
+        //遮罩面
+        var geometry = new THREE.PlaneGeometry(2 * unitWidth, unitWidth);
+        var plane = new THREE.Mesh(geometry, material);
+        plane.position.x = -4 * unitWidth;
+        plane.position.y = 9 * unitWidth - moveDown;
+        plane.position.z = unitWidth / 2;
+        scene.add(plane);
+        //细梁
+        var thinWidth = 12;
+        var geometry = new THREE.BoxGeometry(thinWidth, 8 * unitWidth, thinWidth);
+        var p = [-1, 1, 1, 1, 1, -1], obj = new THREE.Object3D();
+        for (var i = 0; i < 6; i += 2) {
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.position.x = p[i] * (half_unitWidth - thinWidth / 2);
+            mesh.position.z = p[i + 1] * (half_unitWidth - thinWidth / 2);
+            obj.add(mesh);
+        }
+        //细梁装饰块
+        var geometry = new THREE.BoxGeometry(2 * thinWidth, 2 * thinWidth, thinWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.x = -(half_unitWidth - 1.5 * thinWidth);
+        mesh.position.z = (half_unitWidth - thinWidth / 2);
+        mesh.position.y = 4 * unitWidth - 0.5 * thinWidth;
+        obj.add(mesh);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.x = (half_unitWidth - 1.5 * thinWidth);
+        mesh.position.z = (half_unitWidth - thinWidth / 2);
+        mesh.position.y = 4 * unitWidth - 1 * thinWidth;
+        obj.add(mesh);
+        obj.position.x = -4.5 * unitWidth;
+        obj.position.y = 4.5 * unitWidth - moveDown;
+        scene.add(obj);
+
+
+        //可动部分颜色
+        var material = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        //可动部分旋转中心
+        moveCenter = new THREE.Object3D();
+        moveCenter.position.x = 10 / 2 * unitWidth - half_unitWidth;
+        moveCenter.position.z = 0;
+        moveCenter.position.y = 9 * unitWidth - moveDown;
+        //可动 右梁
+        var geometry = new THREE.BoxGeometry(unitWidth, 5 * unitWidth, unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = -2 * unitWidth;
+        moveCenter.add(mesh);
+        //可动 左梁
+        var geometry = new THREE.BoxGeometry(4 * unitWidth, unitWidth, unitWidth);
+        var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.x = -2 * unitWidth - half_unitWidth;
+
+        moveCenter.add(mesh);
+
+        scene.add(moveCenter);
+        moveObject.push(moveCenter);
+    }
+
+    var materialMove = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0 });
+    var materialMove22 = new THREE.MeshLambertMaterial({ color: 0xabcdef });
+    //var rel = { r01: 0, r12: 0 };
+    var rel = {};
+    var moveModule = [];//移动模块数组
+    var objectsArray = [];//测试点击的对象数组
+    var lowerCenter, upperCenter, lowerCenter2, upperCenter2;//移动模块，将移动坐标整合成一个Object3D对象
+    //建立2D面
+    function init2DPlane() {
+        var material = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0 });
+        var material22 = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+        var geometry = new THREE.PlaneGeometry(unitWidth, unitWidth);
+        //下部底梁
+        lowerCenter = new THREE.Object3D();
+        lowerCenter.movetargets = [];
+        for (var i = 0; i < 9; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 0;
+            objectsArray.push(plane);
+            plane.position.x = (3.5 - i) * unitWidth;
+            plane.position.y = 0.5 * unitWidth - moveDown;
+            plane.rotateX(-Math.PI / 2);
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y + 0.5 * unitWidth, plane.position.z);
+            //plane.movetarget = new THREE.Vector3(plane.position.x, plane.position.y + 0.5 * unitWidth, plane.position.z);
+            lowerCenter.add(plane.movetarget);
+            plane.callback = planeCallback;
+            lowerCenter.add(plane);
+            lowerCenter.movetargets.push(plane);
+        }
+        //下部左梁
+        for (var i = 9; i < 13; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 0;
+            objectsArray.push(plane);
+            plane.position.x = -4.5 * unitWidth;
+            plane.position.y = 0.5 * unitWidth - moveDown;
+            plane.position.z = (8 - i) * unitWidth;
+            plane.rotateX(-Math.PI / 2);
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y + 0.5 * unitWidth, plane.position.z);
+            //plane.movetarget = new THREE.Vector3(plane.position.x, plane.position.y + 0.5 * unitWidth, plane.position.z);
+            lowerCenter.add(plane.movetarget);
+            plane.callback = planeCallback
+            lowerCenter.add(plane);
+            lowerCenter.movetargets.push(plane);
+        }
+        lowerCenter.upentry = new THREE.Mesh(geometry, materialMove);
+        lowerCenter.upentry.position.set(-4.5 * unitWidth, unitWidth - moveDown, -5 * unitWidth);
+        lowerCenter.upentryindex = 1;
+        lowerCenter.upentryindexs = [1, 2];
+        lowerCenter.lowentryindexs = [];
+        lowerCenter.add(lowerCenter.upentry);
+        lowerCenter.direction = 0;
+        scene.add(lowerCenter);
+        moveModule.push(lowerCenter);
+
+        //可动部分右梁
+        moveCenter.movetargets = [];
+        for (var i = 0; i < 5; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 1;
+            objectsArray.push(plane);
+            plane.position.x = 0;
+            plane.position.y = (i - 4) * unitWidth;
+            plane.position.z = 0.5 * unitWidth;
+            plane.movetarget = new THREE.Mesh(geometry, materialMove);
+            plane.movetarget.position.set(
+                plane.position.x,
+                plane.position.y,
+                plane.position.z + 0.5 * unitWidth);
+            //plane.movetarget = new THREE.Vector3(
+            //    plane.position.x,
+            //    plane.position.y,
+            //    plane.position.z + 0.5 * unitWidth)
+            plane.callback = planeCallback
+            moveCenter.add(plane);
+            moveCenter.add(plane.movetarget);
+            moveCenter.movetargets.push(plane);
+        }
+        for (var i = 5; i < 9; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 1;
+            objectsArray.push(plane);
+            plane.position.x = (4 - i) * unitWidth;
+            plane.position.y = 0;
+            plane.position.z = 0.5 * unitWidth;
+            plane.movetarget = new THREE.Mesh(geometry, materialMove);
+            plane.movetarget.position.set(
+                plane.position.x,
+                plane.position.y,
+                plane.position.z + 0.5 * unitWidth);
+            //plane.movetarget = new THREE.Vector3(
+            //    plane.position.x,
+            //    plane.position.y,
+            //    plane.position.z + 0.5 * unitWidth)
+            plane.callback = planeCallback
+            moveCenter.add(plane);
+            moveCenter.add(plane.movetarget);
+            moveCenter.movetargets.push(plane);
+        }
+        moveCenter.lowentry = new THREE.Mesh(geometry, materialMove);
+        moveCenter.lowentry.position.set(0, -5 * unitWidth, unitWidth);
+        moveCenter.upentry = new THREE.Mesh(geometry, materialMove);
+        moveCenter.upentry.position.set(-5 * unitWidth, 0, unitWidth);
+        moveCenter.add(moveCenter.lowentry);
+        moveCenter.add(moveCenter.upentry);
+        moveCenter.upentryindex = 4;
+        moveCenter.lowentryindex = 3;
+        moveCenter.upentryindex = 3;
+        moveCenter.lowentryindexs = [3, 0];
+        moveCenter.upentryindexs = [2, 4];
+        moveCenter.direction = -1;
+        moveModule.push(moveCenter);
+
+        //上部梁
+        upperCenter = new THREE.Object3D();
+        upperCenter.movetargets = [];
+        for (var i = 0; i < 5; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 2;
+            objectsArray.push(plane);
+            plane.position.x = (-9.5 - i) * unitWidth;
+            plane.position.y = 0.5 * unitWidth - moveDown;
+            plane.position.z = -9 * unitWidth;
+            plane.rotateX(-Math.PI / 2);
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y + 0.5 * unitWidth, plane.position.z);
+            upperCenter.add(plane.movetarget);
+            plane.callback = planeCallback
+            upperCenter.add(plane);
+            upperCenter.movetargets.push(plane);
+        }
+        for (var i = 5; i < 7; i++) {
+            var plane = new THREE.Mesh(geometry, material22);
+            plane.num = i;
+            plane.module = 2;
+            objectsArray.push(plane);
+            plane.position.x = -13.5 * unitWidth;
+            plane.position.y = 0.5 * unitWidth + 2 * stairWidth - moveDown + (i - 5) * 3 * stairWidth;
+            plane.position.z = -9.5 * unitWidth - 2 * stairWidth - (i - 5) * 3 * stairWidth;
+            plane.rotateX(-Math.PI / 2);
+            plane.movetarget = new THREE.Mesh(geometry, materialMove22)
+            plane.movetarget.position.set(plane.position.x, plane.position.y + 0.75 * unitWidth, plane.position.z);
+            upperCenter.add(plane.movetarget);
+            plane.callback = planeCallback
+            upperCenter.add(plane);
+            upperCenter.movetargets.push(plane);
+        }
+        //顶平台前置 该处作用仅为让运动显得更加平滑
+        var plane = new THREE.Mesh(geometry, material22);
+        plane.num = 7;
+        plane.module = 2;
+        plane.position.x = -13.5 * unitWidth;
+        plane.position.y = 0.5 * unitWidth + 2 * stairWidth - moveDown + 2 * 3 * stairWidth;
+        plane.position.z = -9.5 * unitWidth - 2 * stairWidth - 2 * 3 * stairWidth;
+        plane.rotateX(-Math.PI / 2);
+        plane.movetarget = new THREE.Mesh(geometry, materialMove22)
+        plane.movetarget.position.set(plane.position.x, plane.position.y + 0.75 * unitWidth, plane.position.z);
+        upperCenter.add(plane.movetarget);
+        upperCenter.add(plane);
+        upperCenter.movetargets.push(plane);
+        //顶平台前置结束
+        //顶平台
+        var plane = new THREE.Mesh(new THREE.PlaneGeometry(2 * unitWidth, 2 * unitWidth), material22);
+        plane.num = 8;
+        plane.module = 2;
+        objectsArray.push(plane);
+        plane.position.x = -13.5 * unitWidth;
+        plane.position.y = 10.5 * stairWidth - moveDown;
+        plane.position.z = -9.5 * stairWidth - 10 * unitWidth;
+        plane.rotateX(-Math.PI / 2);
+        plane.movetarget = new THREE.Mesh(geometry, materialMove22)
+        plane.movetarget.position.set(plane.position.x, plane.position.y + 0.75 * unitWidth, plane.position.z);
+        upperCenter.add(plane.movetarget);
+        plane.callback = planeCallback
+        upperCenter.add(plane);
+        upperCenter.movetargets.push(plane);
+        terminal = plane;
+        //平台结束
+        upperCenter.lowentry = new THREE.Mesh(geometry, materialMove);
+        upperCenter.lowentry.position.set(-8.5 * unitWidth, unitWidth - moveDown, -9 * unitWidth);
+        upperCenter.add(upperCenter.lowentry);
+        upperCenter.lowentryindex = 1;
+        upperCenter.lowentryindexs = [0, 1];
+        upperCenter.upentryindexs = [];
+        upperCenter.direction = 0;
+        moveModule.push(upperCenter);
+        scene.add(upperCenter);
+
+        //下部侧梁
+        lowerCenter2 = new THREE.Object3D();
+        lowerCenter2.movetargets = [];
+        for (var i = 0; i < 10; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 3;
+            objectsArray.push(plane);
+            plane.position.x = (-4.5 + i) * unitWidth;
+            plane.position.y = -moveDown;
+            plane.position.z = 0.5 * unitWidth;
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y, plane.position.z + 0.5 * unitWidth);
+            lowerCenter2.add(plane.movetarget);
+            plane.callback = planeCallback
+            lowerCenter2.add(plane);
+            lowerCenter2.movetargets.push(plane);
+        }
+        for (var i = 10; i < 15; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 3;
+            objectsArray.push(plane);
+            plane.position.x = 4.5 * unitWidth;
+            plane.position.y = (i - 10) * unitWidth - moveDown;
+            plane.position.z = 0.5 * unitWidth;
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y, plane.position.z + 0.5 * unitWidth);
+            lowerCenter2.add(plane.movetarget);
+            plane.callback = planeCallback
+            lowerCenter2.add(plane);
+            lowerCenter2.movetargets.push(plane);
+        }
+        lowerCenter2.upentry = new THREE.Mesh(geometry, materialMove);
+        lowerCenter2.upentry.position.set(4.5 * unitWidth, 5 * unitWidth - moveDown, unitWidth);
+        lowerCenter2.add(lowerCenter2.upentry);
+        lowerCenter2.upentryindex = 1;
+        lowerCenter2.lowentryindexs = [];
+        lowerCenter2.upentryindexs = [1, 4];
+        lowerCenter2.direction = -1;
+        moveModule.push(lowerCenter2);
+        scene.add(lowerCenter2);
+
+        //上部 侧梁
+        upperCenter2 = new THREE.Object3D();
+        upperCenter2.movetargets = [];
+        //for (var i = 0; i < 2; i++) {
+        //    var plane = new THREE.Mesh(geometry, material);
+        //    plane.num = i;
+        //    plane.module = 4;
+        //    objectsArray.push(plane);
+        //    plane.position.x = (-9.5 - i) * unitWidth;
+        //    plane.position.y = - moveDown;
+        //    plane.position.z = -8.5 * unitWidth;
+        //    plane.movetarget = new THREE.Mesh(geometry, materialMove)
+        //    plane.movetarget.position.set(plane.position.x, plane.position.y, plane.position.z + 0.5 * unitWidth);
+        //    upperCenter2.add(plane.movetarget);
+        //    plane.callback = planeCallback
+        //    upperCenter2.add(plane);
+        //    upperCenter2.movetargets.push(plane);
+        //}
+        for (var i = 0; i < 5; i++) {
+            var plane = new THREE.Mesh(geometry, material);
+            plane.num = i;
+            plane.module = 4;
+            objectsArray.push(plane);
+            plane.position.x = (-0.5 - i) * unitWidth;
+            plane.position.y = 9 * unitWidth - moveDown;
+            plane.position.z = unitWidth / 2;
+            plane.movetarget = new THREE.Mesh(geometry, materialMove)
+            plane.movetarget.position.set(plane.position.x, plane.position.y, plane.position.z + 0.5 * unitWidth);
+            upperCenter2.add(plane.movetarget);
+            plane.callback = planeCallback
+            upperCenter2.add(plane);
+            upperCenter2.movetargets.push(plane);
+        }
+        upperCenter2.lowentry = new THREE.Mesh(geometry, materialMove);
+        upperCenter2.lowentry.position.set(0.5 * unitWidth, 9 * unitWidth - moveDown, unitWidth);
+        upperCenter2.add(upperCenter2.lowentry);
+        upperCenter2.lowentryindex = 1;
+        upperCenter2.upentryindexs = [];
+        upperCenter2.lowentryindexs = [1, 3];
+        upperCenter2.direction = -1;
+        moveModule.push(upperCenter2);
+        scene.add(upperCenter2);
+    }
+    function planeCallback() {
+        TWEEN.removeAll();
+        var target_index = this.num;
+        var target_module = this.module;
+        var current_index = moveMan.index;
+        var current_module = moveMan.module;
+        if (target_module == current_module) {
+            if (target_index >= current_index)
+                moveMan.moveNext(1, target_module, target_index);
+            else
+                moveMan.moveNext(-1, target_module, target_index);
+        }
+        else {
+            var um = moveModule[current_module].upentryindexs;
+            if (um.indexOf(target_module) >= 0) {
+                moveMan.moveNext(1, target_module, target_index);
+                return
+            }
+            var um = moveModule[current_module].lowentryindexs;
+            if (um.indexOf(target_module) >= 0) {
+                moveMan.moveNext(-1, target_module, target_index);
+                return;
+            }
+        }
+
+    }
+    var moveMan;
+    function initMoveMan() {
+        var material = new THREE.MeshLambertMaterial({ color: 0xFFFF00 });
+        var geometry = new THREE.BoxGeometry(0.3 * unitWidth, 1 * unitWidth, 0.3 * unitWidth);
+        moveMan = new THREE.Mesh(geometry, material);
+        moveMan.position.y = unitWidth - moveDown;
+        moveMan.position.x = 3 * unitWidth;
+        scene.add(moveMan);
+        moveMan.index = 0;
+        moveMan.module = 0;
+        moveMan.moveSpeed = 200;
+        moveMan.changeModule = false;
+        moveMan.moveNext = function (i, moduleNum, index) {
+            var next;
+            if (this.module == moduleNum && this.index == index)
+                return;
+            var length = moveModule[this.module].movetargets.length;
+            if (i > 0) {
+                if (this.index < length - 1) {
+                    next = moveModule[this.module].movetargets[this.index + 1].movetarget;
+                    this.index++;
+                    this.changeModule = false;
+                }
+                else {
+                    var nextModuleIndex = moveModule[this.module].upentryindex;
+                    if (rel["r" + this.module + nextModuleIndex] == undefined) {
+                        return;
+                    }
+                    this.module = nextModuleIndex;
+                    moveModule[this.module].add(moveMan);
+                    moveMan.rotation.x = 0;
+                    moveMan.rotateX(moveModule[this.module].direction * Math.PI / 2);
+                    this.position.set(
+                        moveModule[this.module].lowentry.position.x,
+                        moveModule[this.module].lowentry.position.y,
+                        moveModule[this.module].lowentry.position.z);
+                    next = moveModule[this.module].movetargets[0].movetarget;
+                    this.index = 0;
+                    this.changeModule = true;
+                }
+            }
+            else if (i < 0) {
+                if (this.index > 0) {
+                    next = moveModule[this.module].movetargets[this.index - 1].movetarget;
+                    this.index--;
+                    this.changeModule = false;
+                }
+                else {
+                    var nextModuleIndex = moveModule[this.module].lowentryindex;
+                    if (rel["r" + nextModuleIndex + this.module] == undefined) {
+                        return;
+                    }
+                    this.module = nextModuleIndex;
+                    moveModule[this.module].add(moveMan);
+                    moveMan.rotation.x = 0;
+                    moveMan.rotateX(moveModule[this.module].direction * Math.PI / 2);
+                    this.position.set(
+                        moveModule[this.module].upentry.position.x,
+                        moveModule[this.module].upentry.position.y,
+                        moveModule[this.module].upentry.position.z)
+                    next = moveModule[this.module].movetargets[moveModule[this.module].movetargets.length - 1].movetarget;
+                    this.index = moveModule[this.module].movetargets.length - 1;
+                    this.changeModule = true;
+                }
+            }
+            var nextX = next.position.x, nextY = next.position.y, nextZ = next.position.z;
+
+            new TWEEN.Tween(this.position)
+                .to({ x: nextX, y: nextY, z: nextZ }, this.moveSpeed)
+                .easing(TWEEN.Easing.Linear.None)
+                .start()
+                .onComplete(function () {
+                    if (terminal != undefined && terminal.module == moveMan.module && terminal.num == moveMan.index) {
+                        alert("到达终点");
+                        return;
+                    }
+                    moveMan.moveNext(i, moduleNum, index);
+                });
+        }
+    }
+
+    var controls
+    function initControllser() {
+        controls = new THREE.TrackballControls(camera, renderer.domElement);
+        controls.rotateSpeed = 0.5;
+        controls.minDistance = 500;
+        controls.maxDistance = 6000;
+        controls.addEventListener('change', render);
+    }
+
+    function threeStart() {
+        initThree();
+        initCamera();
+        initScene();
+        initLight();
+        initObject();
+        init2DPlane();
+        initMoveMan();
+        initControllser();
+        renderer.clear();
+        render();
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        TWEEN.update();
+        controls.update();
+        render();
+    }
+
+    function render() {
+        renderer.render(scene, camera);
+    }
+
+    //旋转可动部分
+    var flag = -1;
+    var rotateFinished = true;
+    $(".button").click(function () {
+        if (rotateFinished) {
+            rotateFinished = false;
+            rotate();
+        }
+    })
+    function rotate() {
+        document.removeEventListener('touchstart', onDocumentMouseDown, false);
+        rel = {};
+        for (var i = 0; i < moveObject.length; i++) {
+            var object = moveObject[i];
+            new TWEEN.Tween(object.rotation)
+                .to({ x: object.rotation.x + Math.PI / 2 * flag }, 1000)
+                .easing(TWEEN.Easing.Exponential.InOut)
+			    .start()
+                .onHalf(function () {
+                    if (flag == -1) {
+                        rel["r31"] = 1;
+                        rel["r14"] = 1;
+                        moveCenter.upentryindex = 4;
+                        moveCenter.lowentryindex = 3;
+                        object.position.x = 10 / 2 * unitWidth - half_unitWidth;
+                        object.position.z = 0;
+                        object.position.y = 9 * unitWidth - moveDown;
+                    }
+                    else {
+                        rel["r01"] = 1;
+                        rel["r12"] = 1;
+                        moveCenter.upentryindex = 2;
+                        moveCenter.lowentryindex = 0;
+                        object.position.y = -moveDown;
+                        object.position.x = -(10 / 2 * unitWidth) + half_unitWidth;
+                        object.position.z = -9 * unitWidth;
+                    }
+                })
+                .onComplete(function () {
+                    rotateFinished = true;
+                    document.addEventListener('touchstart', onDocumentMouseDown, false);
+                })
+        }
+        flag = -flag;
+    }
+
+    //射线intersect模拟点击
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    //document.addEventListener('mousedown', onDocumentMouseDown, false);
+    document.addEventListener('touchstart', onDocumentMouseDown, false);
+    function onDocumentMouseDown(event) {
+        var touch = event.touches[0];
+        //event.preventDefault();
+        mouse.x = (touch.clientX / renderer.domElement.clientWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / renderer.domElement.clientHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        var intersects = raycaster.intersectObjects(objectsArray);
+        if (intersects.length > 0) {
+            intersects[0].object.callback();
+        }
+    }
+</script>
